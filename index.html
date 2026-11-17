@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PayBridge</title>
+  <link rel="stylesheet" href="src/style.css" />
+</head>
+<body>
+  <!-- Landing / Sign-in & Sign-up -->
+  <section id="screen-landing" class="screen active">
+    <div class="screen-header">
+      <div class="brand-mark">PayBridge</div>
+      <p>Sign in to your account, or create a new one to get started.</p>
+    </div>
+    <div class="screen-body">
+      <div class="auth-tabs">
+        <button class="tab active" id="tab-signin">Sign In</button>
+        <button class="tab" id="tab-signup">Create Account</button>
+      </div>
+
+      <!-- Sign In Form -->
+      <div id="form-signin" class="auth-form active">
+        <form id="signin-form">
+          <div class="form-group">
+            <label for="signin-identifier">Phone number or email</label>
+            <input type="text" id="signin-identifier" name="identifier"
+              placeholder="+256 700 000 000 or you@example.com" required />
+          </div>
+          <div class="form-group">
+            <label for="signin-password">Password</label>
+            <input type="password" id="signin-password" name="password" placeholder="••••••••" required />
+          </div>
+          <div class="form-group">
+            <label for="signin-network">Mobile money network</label>
+            <select id="signin-network" name="network" required>
+              <option value="MTN">MTN Mobile Money</option>
+              <option value="Airtel">Airtel Money</option>
+            </select>
+          </div>
+          <button type="submit" class="btn btn-primary">Sign In</button>
+        </form>
+      </div>
+
+      <!-- Sign Up Form -->
+      <div id="form-signup" class="auth-form hidden">
+        <form id="signup-form">
+          <div class="form-group">
+            <label for="signup-name">Full name</label>
+            <input type="text" id="signup-name" name="name" placeholder="John Doe" required />
+          </div>
+          <div class="form-group">
+            <label for="signup-email">Email</label>
+            <input type="email" id="signup-email" name="email" placeholder="you@example.com" required />
+          </div>
+          <div class="form-group">
+            <label for="signup-phone">Phone number</label>
+            <input type="tel" id="signup-phone" name="phone" placeholder="+256 700 000 000" required />
+          </div>
+          <div class="form-group">
+            <label for="signup-password">Create password</label>
+            <input type="password" id="signup-password" name="password" placeholder="••••••••" required />
+          </div>
+          <div class="form-group">
+            <label for="signup-network">Mobile money network</label>
+            <select id="signup-network" name="network" required>
+              <option value="MTN">MTN Mobile Money</option>
+              <option value="Airtel">Airtel Money</option>
+            </select>
+          </div>
+          <button type="submit" class="btn btn-primary">Create Account</button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <div id="loading-overlay">
+    <div class="spinner"></div>
+    <div>Processing&hellip;</div>
+  </div>
+
+  <div id="toast-container"></div>
+
+  <script src="dist/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PayBridge | Cash Out</title>
+  <link rel="stylesheet" href="src/style.css" />
+</head>
+<body>
+  <nav id="app-nav">
+    <div class="nav-brand">
+      <img class="nav-avatar" src="https://ui-avatars.com/api/?name=User&background=00a67d&color=fff&size=32"
+        alt="User" />
+      <span class="nav-user">User</span>
+    </div>
+    <div class="nav-links">
+      <a href="dashboard.html" class="nav-link" id="nav-dashboard">Dashboard</a>
+      <a href="cashout.html" class="nav-link active" id="nav-cashout">Cash Out</a>
+      <a href="invoice.html" class="nav-link" id="nav-invoice">Invoice</a>
+    </div>
+    <a href="index.html" class="nav-link-logout" id="nav-logout">Sign Out</a>
+  </nav>
+
+  <section id="screen-cashout" class="screen active">
+    <div class="screen-header">
+      <h1>Cash Out</h1>
+    </div>
+
+    <div class="screen-body">
+      <div class="card">
+        <div class="amount-input-wrapper">
+          <span class="amount-prefix">USD</span>
+          <input type="number" id="cashout-amount" name="amount" step="0.01" min="0" placeholder="0.00" />
+        </div>
+        <div class="fee-breakdown">
+          <div class="fee-row">
+            <span class="label">Amount</span>
+            <span class="value" id="preview-amount">$0.00</span>
+          </div>
+          <div class="fee-row">
+            <span class="label">PayBridge fee (3.5%)</span>
+            <span class="value" id="fee-usd">–</span>
+          </div>
+          <div class="fee-row total">
+            <span class="label">You receive</span>
+            <span class="value" id="net-ugx">–</span>
+          </div>
+        </div>
+        <div class="confirm-section">
+          <button class="btn btn-primary" id="confirm-cashout">Confirm Cash Out</button>
+        </div>
+        <p style="font-size: 0.8rem; color: #718096; margin-top: 12px;">
+          Funds arrive within 30 minutes. Fee: 3.5% intro, min UGX 3,000, never above 5%.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <div id="loading-overlay">
+    <div class="spinner"></div>
+    <div>Processing&hellip;</div>
+  </div>
+
+  <div id="toast-container"></div>
+
+  <script src="dist/app.js"></script>
+</body>
+</html>

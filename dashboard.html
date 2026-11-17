@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PayBridge | Dashboard</title>
+  <link rel="stylesheet" href="src/style.css" />
+</head>
+<body>
+  <nav id="app-nav">
+    <div class="nav-brand">
+      <img class="nav-avatar" src="https://ui-avatars.com/api/?name=User&background=00a67d&color=fff&size=32"
+        alt="User" />
+      <span class="nav-user">User</span>
+    </div>
+    <div class="nav-links">
+      <a href="dashboard.html" class="nav-link active" id="nav-dashboard">Dashboard</a>
+      <a href="cashout.html" class="nav-link" id="nav-cashout">Cash Out</a>
+      <a href="invoice.html" class="nav-link" id="nav-invoice">Invoice</a>
+    </div>
+    <a href="index.html" class="nav-link-logout" id="nav-logout">Sign Out</a>
+  </nav>
+
+  <section id="screen-dashboard" class="screen active">
+    <div class="screen-header">
+      <h1>Dashboard</h1>
+    </div>
+
+    <div class="screen-body">
+      <div class="balance-card">
+        <div class="label">Available Balance</div>
+        <div class="value" id="balance-usd">$0.00</div>
+        <div class="ugx" id="balance-ugx">UGX 0</div>
+      </div>
+
+      <div class="quick-actions">
+        <a href="dashboard.html" class="action-btn">
+          <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
+          <span>Dashboard</span>
+        </a>
+        <a href="cashout.html" class="action-btn">
+          <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg>
+          <span>Cash Out</span>
+        </a>
+        <a href="invoice.html" class="action-btn">
+          <svg viewBox="0 0 24 24"><path d="M22 4H2l-2 8h20z" /></svg>
+          <span>Invoice</span>
+        </a>
+      </div>
+
+      <div class="tx-section">
+        <h3>Recent Transactions</h3>
+        <div id="tx-list"></div>
+      </div>
+    </div>
+  </section>
+
+  <div id="loading-overlay">
+    <div class="spinner"></div>
+    <div>Processing&hellip;</div>
+  </div>
+
+  <div id="toast-container"></div>
+
+  <script src="dist/app.js"></script>
+</body>
+</html>

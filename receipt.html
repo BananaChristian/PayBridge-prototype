@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PayBridge | Receipt</title>
+  <link rel="stylesheet" href="src/style.css" />
+</head>
+<body>
+  <nav id="app-nav">
+    <div class="nav-brand">
+      <img class="nav-avatar" src="https://ui-avatars.com/api/?name=User&background=00a67d&color=fff&size=32"
+        alt="User" />
+      <span class="nav-user">User</span>
+    </div>
+    <div class="nav-links">
+      <a href="dashboard.html" class="nav-link" id="nav-dashboard">Dashboard</a>
+      <a href="cashout.html" class="nav-link" id="nav-cashout">Cash Out</a>
+      <a href="invoice.html" class="nav-link" id="nav-invoice">Invoice</a>
+    </div>
+    <a href="index.html" class="nav-link-logout" id="nav-logout">Sign Out</a>
+  </nav>
+
+  <section id="screen-receipt" class="screen active">
+    <div class="screen-header">
+      <h1>Payment Sent</h1>
+    </div>
+
+    <div class="screen-body">
+      <div class="receipt-card">
+        <div class="receipt-header">
+          <div class="badge">Transaction Complete</div>
+          <h2>Receipt</h2>
+        </div>
+        <div class="receipt-detail">
+          <span class="label">Reference</span>
+          <span class="value" id="receipt-ref">PB-0000</span>
+        </div>
+        <div class="receipt-detail">
+          <span class="label">Amount sent</span>
+          <span class="value" id="receipt-amount">UGX 0</span>
+        </div>
+        <div class="receipt-detail">
+          <span class="label">Fee (3.5%)</span>
+          <span class="value" id="receipt-fee">UGX 0</span>
+        </div>
+        <div class="receipt-detail final">
+          <span class="label">Total received</span>
+          <span class="value" id="receipt-net">UGX 0</span>
+        </div>
+        <div class="receipt-detail">
+          <span class="label">Delivered to</span>
+          <span class="value" id="receipt-network">MTN MoMo</span>
+        </div>
+        <div class="receipt-footer">
+          PayBridge &middot; Licensed PSP agent under NPS Act 2020 &middot; Keep this reference for support
+        </div>
+      </div>
+      <div style="margin-top: 20px;">
+        <a href="cashout.html" class="btn btn-primary" id="btn-new-cashout">Make Another Cash Out</a>
+        <a href="dashboard.html" class="btn btn-secondary" id="btn-back-receipt" style="margin-left: 12px;">Back to
+          Dashboard</a>
+      </div>
+    </div>
+  </section>
+
+  <div id="loading-overlay">
+    <div class="spinner"></div>
+    <div>Processing&hellip;</div>
+  </div>
+
+  <div id="toast-container"></div>
+
+  <script src="dist/app.js"></script>
+</body>
+</html>
