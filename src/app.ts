@@ -22,21 +22,27 @@ interface Transaction {
   reference: string;
   network: string;
   description?: string;
+  invoiceId?: string;
+  clientName?: string;
 }
 
-interface PendingInvoice {
+interface Invoice {
   id: string;
-  client: string;
+  clientName: string;
   amountUsd: number;
-  dueDate: string;
+  description: string;
+  status: "pending" | "settled";
+  createdAt: string;
+  settledAt?: string;
+  reference?: string;
 }
 
 interface AppState {
   user: User | null;
-  paybridgeBalanceUsd: number; // Funds received / cashable
-  accountBalanceUsd: number;     // Actual account balance after cash out
+  paybridgeBalanceUsd: number; // Funds received / available to cash out
+  accountBalanceUsd: number;   // Legacy field kept for compatibility with other pages
   transactions: Transaction[];
-  pendingInvoices: PendingInvoice[];
+  invoices: Invoice[];
 }
 
 const PLANNING_RATE = 3750; // UGX per USD
@@ -45,12 +51,6 @@ const MIN_FEE_UGX = 3000;
 const MAX_FEE_RATE = 0.05; // 5% ceiling
 
 const STORAGE_KEY = "paybridge_prototype_v1";
-
-const DEFAULT_INVOICES: PendingInvoice[] = [
-  { id: "INV-101", client: "Acme Corp (Design Retainer)", amountUsd: 150.00, dueDate: "2026-11-25" },
-  { id: "INV-102", client: "Globex Ltd (Bug Fixes)", amountUsd: 85.00, dueDate: "2026-11-28" },
-  { id: "INV-103", client: "Nile Tech (API Integration)", amountUsd: 220.00, dueDate: "2026-12-02" },
-];
 
 // ---------- Helpers ----------
 function fmtUsd(v: number): string {
@@ -117,7 +117,7 @@ let state: AppState = {
   paybridgeBalanceUsd: 0,
   accountBalanceUsd: 0,
   transactions: [],
-  pendingInvoices: [...DEFAULT_INVOICES],
+  invoices: [],
 };
 
 function loadState(): void {
@@ -133,8 +133,12 @@ function loadState(): void {
   if (!state.transactions) state.transactions = [];
   if (typeof state.paybridgeBalanceUsd !== "number") state.paybridgeBalanceUsd = 0;
   if (typeof state.accountBalanceUsd !== "number") state.accountBalanceUsd = 0;
-  if (!Array.isArray(state.pendingInvoices)) {
-    state.pendingInvoices = [...DEFAULT_INVOICES];
+  if (!Array.isArray(state.invoices)) {
+    state.invoices = [];
+  }
+  // Drop legacy pendingInvoices seeded by older prototype versions
+  if ((state as any).pendingInvoices) {
+    delete (state as any).pendingInvoices;
   }
 }
 
@@ -180,7 +184,7 @@ function initNavbar(): void {
   if (logoutBtn) {
     logoutBtn.addEventListener("click", (e) => {
       e.preventDefault();
-      state = { user: null, paybridgeBalanceUsd: 0, accountBalanceUsd: 0, transactions: [], pendingInvoices: [...DEFAULT_INVOICES] };
+      state = { user: null, paybridgeBalanceUsd: 0, accountBalanceUsd: 0, transactions: [], invoices: [] };
       saveState();
       showToast("Logged out", "info");
       window.location.href = "index.html";
@@ -275,8 +279,8 @@ function initAuth(): void {
         showLoading(false);
         state.user = { name, email, phone, network, password, verified: true };
         state.paybridgeBalanceUsd = 120.0; // Initial cashable balance
-        state.accountBalanceUsd = 0.0;   // Actual account balance starts at 0
-        state.pendingInvoices = [...DEFAULT_INVOICES];
+        state.accountBalanceUsd = 0.0;
+        state.invoices = [];
         state.transactions = [
           {
             id: "tx-001",
@@ -426,138 +430,203 @@ function initCashout(): void {
 }
 
 // ---------- Invoice ----------
+let invoiceFilter: "pending" | "settled" | "all" = "pending";
+let invoiceSearchTerm = "";
+
+function generateInvoiceId(): string {
+  const existing = new Set(state.invoices.map((i) => i.id));
+  for (let n = 0; n < 100; n++) {
+    const id = `INV-${Math.floor(1000 + Math.random() * 9000)}`;
+    if (!existing.has(id)) return id;
+  }
+  return `INV-${Date.now().toString().slice(-6)}`;
+}
+
+function invoicePaymentLink(invoiceId: string): string {
+  const base = window.location.href.replace(/[^/]*$/, "client-pay.html");
+  return `${base}?inv=${encodeURIComponent(invoiceId)}`;
+}
+
+function renderInvoiceList(): void {
+  const listEl = document.getElementById("invoice-list");
+  if (!listEl) return;
+
+  const term = invoiceSearchTerm.trim().toLowerCase();
+  const filtered = state.invoices
+    .filter((inv) => invoiceFilter === "all" || inv.status === invoiceFilter)
+    .filter((inv) => {
+      if (!term) return true;
+      return (
+        inv.id.toLowerCase().includes(term) ||
+        inv.clientName.toLowerCase().includes(term) ||
+        inv.description.toLowerCase().includes(term)
+      );
+    })
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+  if (filtered.length === 0) {
+    const msg =
+      state.invoices.length === 0
+        ? "No invoices yet. Generate your first invoice above."
+        : "No invoices match this filter.";
+    listEl.innerHTML = `<div class="empty">${msg}</div>`;
+    return;
+  }
+
+  listEl.innerHTML = filtered
+    .map((inv) => {
+      const statusLabel = inv.status === "pending" ? "Pending" : "Settled";
+      const statusColor = inv.status === "pending" ? "#b7791f" : "#00a67d";
+      const link = invoicePaymentLink(inv.id);
+      const linkBlock =
+        inv.status === "pending"
+          ? `
+            <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #e2e8f0;">
+              <div style="font-size: 0.8rem; color: #718096; margin-bottom: 4px;">Payment link</div>
+              <div style="font-size: 0.85rem; word-break: break-all; color: #1a366a; margin-bottom: 8px;">${link}</div>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button type="button" class="btn btn-secondary invoice-copy-btn" data-id="${inv.id}" style="width: auto; padding: 6px 10px; font-size: 0.85rem;">Copy link</button>
+                <a href="${link}" target="_blank" rel="noopener" class="btn btn-primary" style="width: auto; padding: 6px 10px; font-size: 0.85rem; display: inline-block; text-align: center;">Open link</a>
+              </div>
+            </div>
+          `
+          : `
+            <div style="margin-top: 8px; font-size: 0.8rem; color: #718096;">
+              Settled ${inv.settledAt ? fmtDate(inv.settledAt) : ""}${inv.reference ? ` · Ref: ${inv.reference}` : ""}
+            </div>
+          `;
+
+      return `
+        <div class="card" style="margin-bottom: 12px;">
+          <div style="display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; flex-wrap: wrap;">
+            <div>
+              <div style="font-weight: 700; font-size: 1rem;">${inv.clientName}</div>
+              <div style="font-size: 0.85rem; color: #718096; margin-top: 2px;">${inv.description}</div>
+              <div style="font-size: 0.8rem; color: #718096; margin-top: 4px;">${inv.id} · Created ${fmtDate(inv.createdAt)}</div>
+            </div>
+            <div style="text-align: right;">
+              <div style="font-weight: 700;">$${fmtUsd(inv.amountUsd)}</div>
+              <div style="font-size: 0.8rem; font-weight: 700; color: ${statusColor}; margin-top: 4px;">${statusLabel}</div>
+            </div>
+          </div>
+          ${linkBlock}
+        </div>
+      `;
+    })
+    .join("");
+
+  listEl.querySelectorAll(".invoice-copy-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const id = (btn as HTMLElement).getAttribute("data-id");
+      const inv = state.invoices.find((i) => i.id === id);
+      if (!inv) return;
+      const link = invoicePaymentLink(inv.id);
+      try {
+        await navigator.clipboard.writeText(link);
+        showToast("Payment link copied", "success");
+      } catch {
+        const input = document.createElement("input");
+        input.value = link;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand("copy");
+        document.body.removeChild(input);
+        showToast("Payment link copied", "success");
+      }
+    });
+  });
+}
+
 function initInvoice(): void {
-  const invoiceContainer = document.getElementById("invoice-container") || document.querySelector(".invoice-card");
-  if (!invoiceContainer) return;
+  const createForm = document.getElementById("invoice-create-form");
+  const listEl = document.getElementById("invoice-list");
+  if (!createForm || !listEl) return;
 
   loadState();
 
-  invoiceContainer.innerHTML = `
-    <h3>Pending Service Buyer Invoices</h3>
-    <div class="invoice-tabs" style="display: flex; gap: 10px; margin-bottom: 16px;">
-      <button class="tab active" style="padding: 6px 12px; font-weight: 600;">Pending (${state.pendingInvoices.length})</button>
-    </div>
-    <div id="invoice-list-container">
-      ${state.pendingInvoices.length === 0 ? '<p class="empty">No pending invoices.</p>' : ''}
-      <div id="pending-invoices">
-        ${state.pendingInvoices.map(inv => `
-          <div class="tx-item" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 12px; border: 1px solid #e2e8f0; border-radius: 12px;">
-            <div>
-              <div style="font-weight: 700;">${inv.client}</div>
-              <div style="font-size: 0.8rem; color: #718096;">ID: ${inv.id} · Due: ${inv.dueDate}</div>
-            </div>
-            <div style="text-align: right;">
-              <div style="font-weight: 700; margin-bottom: 6px;">$${fmtUsd(inv.amountUsd)}</div>
-              <button class="btn btn-primary pay-invoice-btn" data-id="${inv.id}" style="padding: 6px 12px; font-size: 0.85rem; width: auto;">Pay Now</button>
-            </div>
-          </div>
-        `).join('')}
-      </div>
-    </div>
-    <div style="margin-top: 24px; border-top: 1px solid #e2e8f0; padding-top: 16px;">
-      <h4 style="font-size: 0.95rem; margin-bottom: 8px;">Pay Custom Invoice Amount</h4>
-      <form id="invoice-form">
-        <div class="form-group">
-          <label for="invoice-amount">Amount (USD)</label>
-          <input type="number" id="invoice-amount" name="amount" step="0.01" min="0" placeholder="100.00" required />
-        </div>
-        <button type="submit" class="btn pay-btn pay-card" style="background: #00a67d; color: #fff;">Pay Custom Amount</button>
-      </form>
-    </div>
-    <p class="note">PayBridge Cashable Balance: $${fmtUsd(state.paybridgeBalanceUsd)}</p>
-  `;
+  const resultEl = document.getElementById("invoice-link-result");
+  const linkTextEl = document.getElementById("invoice-link-text");
+  const copyBtn = document.getElementById("invoice-copy-link") as HTMLButtonElement | null;
+  const openLinkEl = document.getElementById("invoice-open-link") as HTMLAnchorElement | null;
+  const searchEl = document.getElementById("invoice-search") as HTMLInputElement | null;
+  const filterBtns = document.querySelectorAll("[data-filter]");
 
-  document.querySelectorAll(".pay-invoice-btn").forEach(btn => {
-    btn.addEventListener("click", (e) => {
-      const invId = (e.currentTarget as HTMLElement).getAttribute("data-id");
-      const invIndex = state.pendingInvoices.findIndex(i => i.id === invId);
-      if (invIndex === -1) return;
-
-      const inv = state.pendingInvoices[invIndex];
-      if (!state.user) {
-        showToast("Please sign in first", "error");
-        return;
-      }
-
-      if (inv.amountUsd > state.paybridgeBalanceUsd) {
-        showToast(`Insufficient PayBridge balance. You need $${fmtUsd(inv.amountUsd)} but have $${fmtUsd(state.paybridgeBalanceUsd)}.`, "error");
-        return;
-      }
-
-      showLoading(true);
-      setTimeout(() => {
-        showLoading(false);
-
-        state.paybridgeBalanceUsd -= inv.amountUsd;
-        state.transactions.push({
-          id: "tx-" + Date.now(),
-          type: "cash_out",
-          amountUsd: inv.amountUsd,
-          amountUgx: Math.round(inv.amountUsd * PLANNING_RATE),
-          feeUsd: 0,
-          feeUgx: 0,
-          netUgx: Math.round(inv.amountUsd * PLANNING_RATE),
-          status: "completed",
-          createdAt: new Date().toISOString(),
-          reference: generateRef(),
-          network: state.user!.network,
-          description: `Invoice Paid: ${inv.id}`,
-        });
-
-        state.pendingInvoices.splice(invIndex, 1);
-        saveState();
-        showToast(`Invoice ${inv.id} paid successfully ($${fmtUsd(inv.amountUsd)})`, "success");
-        initInvoice();
-      }, 1000);
-    });
-  });
-
-  const invoiceForm = document.getElementById("invoice-form");
-  invoiceForm?.addEventListener("submit", (e) => {
+  createForm.addEventListener("submit", (e) => {
     e.preventDefault();
-    const invoiceAmountEl = document.getElementById("invoice-amount") as HTMLInputElement | null;
-    const amount = parseFloat(invoiceAmountEl?.value.trim() || "0");
-
-    if (!amount || amount <= 0) {
-      showToast("Enter a valid amount", "error");
-      return;
-    }
     if (!state.user) {
       showToast("Please sign in first", "error");
       return;
     }
+    const clientEl = document.getElementById("invoice-client") as HTMLInputElement | null;
+    const amountEl = document.getElementById("invoice-amount") as HTMLInputElement | null;
+    const descEl = document.getElementById("invoice-description") as HTMLInputElement | null;
+    const clientName = clientEl?.value.trim() || "";
+    const amount = parseFloat(amountEl?.value.trim() || "0");
+    const description = descEl?.value.trim() || "";
 
-    if (amount > state.paybridgeBalanceUsd) {
-      showToast(`Insufficient PayBridge balance to pay $${fmtUsd(amount)}.`, "error");
+    if (!clientName || !description || !amount || amount <= 0) {
+      showToast("Please fill in all fields with a valid amount", "error");
       return;
     }
 
-    const user = state.user!;
-    showLoading(true);
-    setTimeout(() => {
-      showLoading(false);
+    const invoice: Invoice = {
+      id: generateInvoiceId(),
+      clientName,
+      amountUsd: amount,
+      description,
+      status: "pending",
+      createdAt: new Date().toISOString(),
+    };
+    state.invoices.push(invoice);
+    saveState();
 
-      state.paybridgeBalanceUsd -= amount;
-      state.transactions.push({
-        id: "tx-" + Date.now(),
-        type: "cash_out",
-        amountUsd: amount,
-        amountUgx: Math.round(amount * PLANNING_RATE),
-        feeUsd: 0,
-        feeUgx: 0,
-        netUgx: Math.round(amount * PLANNING_RATE),
-        status: "completed",
-        createdAt: new Date().toISOString(),
-        reference: generateRef(),
-        network: user.network,
-        description: "Custom Invoice Payment",
-      });
+    const link = invoicePaymentLink(invoice.id);
+    if (linkTextEl) linkTextEl.textContent = link;
+    if (openLinkEl) openLinkEl.href = link;
+    if (resultEl) resultEl.classList.remove("hidden");
 
-      saveState();
-      showToast(`Invoice payment of $${fmtUsd(amount)} processed`, "success");
-      window.location.href = "dashboard.html";
-    }, 1200);
+    (createForm as HTMLFormElement).reset();
+    showToast(`Invoice ${invoice.id} created`, "success");
+    invoiceFilter = "pending";
+    updateInvoiceFilterTabs();
+    renderInvoiceList();
   });
+
+  copyBtn?.addEventListener("click", async () => {
+    const link = linkTextEl?.textContent || "";
+    if (!link) return;
+    try {
+      await navigator.clipboard.writeText(link);
+      showToast("Payment link copied", "success");
+    } catch {
+      showToast("Copy failed. Select the link and copy it manually.", "error");
+    }
+  });
+
+  function updateInvoiceFilterTabs(): void {
+    filterBtns.forEach((b) => {
+      const f = (b as HTMLElement).getAttribute("data-filter");
+      b.classList.toggle("active", f === invoiceFilter);
+    });
+  }
+
+  filterBtns.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const f = (btn as HTMLElement).getAttribute("data-filter") as "pending" | "settled" | "all" | null;
+      if (!f) return;
+      invoiceFilter = f;
+      updateInvoiceFilterTabs();
+      renderInvoiceList();
+    });
+  });
+
+  searchEl?.addEventListener("input", () => {
+    invoiceSearchTerm = searchEl.value;
+    renderInvoiceList();
+  });
+
+  updateInvoiceFilterTabs();
+  renderInvoiceList();
 }
 
 // ---------- Receipt ----------

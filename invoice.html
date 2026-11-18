@@ -13,7 +13,7 @@
     <div class="nav-brand">
       <img class="nav-avatar" src="https://ui-avatars.com/api/?name=User&background=00a67d&color=fff&size=32"
         alt="User" />
-      <span class="nav-user">User</span>
+      <span class="nav-user" id="nav-user">User</span>
     </div>
     <div class="nav-links">
       <a href="dashboard.html" class="nav-link" id="nav-dashboard">Dashboard</a>
@@ -25,11 +25,50 @@
 
   <section id="screen-invoice" class="screen active">
     <div class="screen-header">
+      <h1>Invoices</h1>
+      <p>Create payment links for direct clients and track what is paid.</p>
     </div>
 
     <div class="screen-body">
-      <div class="invoice-card" id="invoice-container">
-        <!-- Dynamically populated by initInvoice() -->
+      <div class="card" style="margin-bottom: 20px;">
+        <h3 style="font-size: 1rem; margin-bottom: 12px;">Generate invoice</h3>
+        <form id="invoice-create-form">
+          <div class="form-group">
+            <label for="invoice-client">Client name</label>
+            <input type="text" id="invoice-client" name="client" placeholder="John Doe" required />
+          </div>
+          <div class="form-group">
+            <label for="invoice-amount">Amount (USD)</label>
+            <input type="number" id="invoice-amount" name="amount" step="0.01" min="0.01" placeholder="150.00" required />
+          </div>
+          <div class="form-group">
+            <label for="invoice-description">What it's for</label>
+            <input type="text" id="invoice-description" name="description" placeholder="Web design, milestone 2" required />
+          </div>
+          <button type="submit" class="btn btn-primary">Generate invoice</button>
+        </form>
+        <div id="invoice-link-result" class="hidden" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #e2e8f0;">
+          <div style="font-weight: 700; margin-bottom: 6px;">Payment link</div>
+          <div id="invoice-link-text" style="font-size: 0.9rem; word-break: break-all; color: #1a366a; margin-bottom: 10px;"></div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button type="button" class="btn btn-secondary" id="invoice-copy-link">Copy link</button>
+            <a href="#" target="_blank" rel="noopener" class="btn btn-primary" id="invoice-open-link" style="display: inline-block; width: auto; text-align: center;">Open link in new tab</a>
+          </div>
+          <p class="note" style="margin-top: 10px;">Send this link to your client. They can pay without creating a PayBridge account.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px;">
+          <h3 style="font-size: 1rem;">Your invoices</h3>
+          <input type="text" id="invoice-search" placeholder="Search client, ID, or description" style="max-width: 280px; width: 100%; padding: 8px 10px; border: 1px solid #cbd5e0; border-radius: 6px; font-size: 0.9rem;" />
+        </div>
+        <div class="invoice-tabs" style="display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap;">
+          <button type="button" class="tab active" data-filter="pending" id="invoice-filter-pending">Pending</button>
+          <button type="button" class="tab" data-filter="settled" id="invoice-filter-settled">Settled</button>
+          <button type="button" class="tab" data-filter="all" id="invoice-filter-all">All</button>
+        </div>
+        <div id="invoice-list"></div>
       </div>
     </div>
   </section>
