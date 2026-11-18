@@ -385,17 +385,120 @@ function initCashout(): void {
   });
 }
 
+
+/// ----------------------- start ---------------
+
 // ---------- Invoice (only on invoice page) ----------
+interface PendingInvoice {
+  id: string;
+  client: string;
+  amountUsd: number;
+  dueDate: string;
+}
+
+let mockPendingInvoices: PendingInvoice[] = [
+  { id: "INV-101", client: "Acme Corp (Design Retainer)", amountUsd: 150.00, dueDate: "2026-11-25" },
+  { id: "INV-102", client: "Globex Ltd (Bug Fixes)", amountUsd: 85.00, dueDate: "2026-11-28" },
+  { id: "INV-103", client: "Nile Tech (API Integration)", amountUsd: 220.00, dueDate: "2026-12-02" },
+];
+
 function initInvoice(): void {
-  const invoiceForm = document.getElementById("invoice-form");
-  const invoiceAmountEl = document.getElementById("invoice-amount") as HTMLInputElement | null;
-  if (!invoiceForm || !invoiceAmountEl) return;
+  const invoiceContainer = document.getElementById("invoice-container") || document.querySelector(".invoice-card");
+  if (!invoiceContainer) return;
 
   loadState();
 
-  invoiceForm.addEventListener("submit", (e) => {
+  // Render pending invoices and custom payment form
+  invoiceContainer.innerHTML = `
+    <h3>Pending Service Buyer Invoices</h3>
+    <div class="invoice-tabs" style="display: flex; gap: 10px; margin-bottom: 16px;">
+      <button class="tab active" style="padding: 6px 12px; font-weight: 600;">Pending (${mockPendingInvoices.length})</button>
+    </div>
+    <div id="invoice-list-container">
+      ${mockPendingInvoices.length === 0 ? '<p class="empty">No pending invoices.</p>' : ''}
+      <div id="pending-invoices">
+        ${mockPendingInvoices.map(inv => `
+          <div class="tx-item" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 12px; border: 1px solid #e2e8f0; border-radius: 12px;">
+            <div>
+              <div style="font-weight: 700;">${inv.client}</div>
+              <div style="font-size: 0.8rem; color: #718096;">ID: ${inv.id} · Due: ${inv.dueDate}</div>
+            </div>
+            <div style="text-align: right;">
+              <div style="font-weight: 700; margin-bottom: 6px;">$${fmtUsd(inv.amountUsd)}</div>
+              <button class="btn btn-primary pay-invoice-btn" data-id="${inv.id}" style="padding: 6px 12px; font-size: 0.85rem; width: auto;">Pay Now</button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+    <div style="margin-top: 24px; border-top: 1px solid #e2e8f0; padding-top: 16px;">
+      <h4 style="font-size: 0.95rem; margin-bottom: 8px;">Pay Custom Invoice Amount</h4>
+      <form id="invoice-form">
+        <div class="form-group">
+          <label for="invoice-amount">Amount (USD)</label>
+          <input type="number" id="invoice-amount" name="amount" step="0.01" min="0" placeholder="100.00" required />
+        </div>
+        <button type="submit" class="btn pay-btn pay-card" style="background: #00a67d; color: #fff;">Pay Custom Amount</button>
+      </form>
+    </div>
+    <p class="note">Available Balance: $${fmtUsd(state.balanceUsd)}</p>
+  `;
+
+  // Handle specific pending invoice payments
+  document.querySelectorAll(".pay-invoice-btn").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      const invId = (e.currentTarget as HTMLElement).getAttribute("data-id");
+      const invIndex = mockPendingInvoices.findIndex(i => i.id === invId);
+      if (invIndex === -1) return;
+
+      const inv = mockPendingInvoices[invIndex];
+      if (!state.user) {
+        showToast("Please sign in first", "error");
+        return;
+      }
+
+      // Check balance consistency
+      if (inv.amountUsd > state.balanceUsd) {
+        showToast(`Insufficient balance. You need $${fmtUsd(inv.amountUsd)} but have $${fmtUsd(state.balanceUsd)}.`, "error");
+        return;
+      }
+
+      showLoading(true);
+      setTimeout(() => {
+        showLoading(false);
+        
+        // Deduct from balance and log accurate transaction matching the invoice amount
+        state.balanceUsd -= inv.amountUsd;
+        state.transactions.push({
+          id: "tx-" + Date.now(),
+          type: "cash_out",
+          amountUsd: inv.amountUsd,
+          amountUgx: Math.round(inv.amountUsd * PLANNING_RATE),
+          feeUsd: 0,
+          feeUgx: 0,
+          netUgx: Math.round(inv.amountUsd * PLANNING_RATE),
+          status: "completed",
+          createdAt: new Date().toISOString(),
+          reference: generateRef(),
+          network: state.user!.network,
+        });
+
+        // Remove paid invoice from pending list
+        mockPendingInvoices.splice(invIndex, 1);
+        saveState();
+        showToast(`Invoice ${inv.id} paid successfully ($${fmtUsd(inv.amountUsd)})`, "success");
+        initInvoice(); // Refresh view
+      }, 1000);
+    });
+  });
+
+  // Handle custom amount payment form
+  const invoiceForm = document.getElementById("invoice-form");
+  invoiceForm?.addEventListener("submit", (e) => {
     e.preventDefault();
-    const amount = parseFloat(invoiceAmountEl.value.trim());
+    const invoiceAmountEl = document.getElementById("invoice-amount") as HTMLInputElement | null;
+    const amount = parseFloat(invoiceAmountEl?.value.trim() || "0");
+    
     if (!amount || amount <= 0) {
       showToast("Enter a valid amount", "error");
       return;
@@ -404,14 +507,22 @@ function initInvoice(): void {
       showToast("Please sign in first", "error");
       return;
     }
+
+    // Check balance consistency for custom amount
+    if (amount > state.balanceUsd) {
+      showToast(`Insufficient balance to pay $${fmtUsd(amount)}.`, "error");
+      return;
+    }
+
     const user = state.user!;
     showLoading(true);
     setTimeout(() => {
       showLoading(false);
-      state.balanceUsd += amount;
+
+      state.balanceUsd -= amount;
       state.transactions.push({
         id: "tx-" + Date.now(),
-        type: "receive",
+        type: "cash_out",
         amountUsd: amount,
         amountUgx: Math.round(amount * PLANNING_RATE),
         feeUsd: 0,
@@ -422,12 +533,16 @@ function initInvoice(): void {
         reference: generateRef(),
         network: user.network,
       });
+
       saveState();
-      showToast(`Payment of $${fmtUsd(amount)} received`, "success");
+      showToast(`Invoice payment of $${fmtUsd(amount)} processed`, "success");
       window.location.href = "dashboard.html";
-    }, 1500);
+    }, 1200);
   });
 }
+
+// ------------------------ end -----------------
+
 
 // ---------- Receipt (only on receipt page) ----------
 function initReceipt(): void {

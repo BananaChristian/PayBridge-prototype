@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PayBridge | Invoice</title>
+  <title>PayBridge | Invoices</title>
   <link rel="stylesheet" href="src/style.css" />
 </head>
 <body>
@@ -16,29 +16,19 @@
     <div class="nav-links">
       <a href="dashboard.html" class="nav-link" id="nav-dashboard">Dashboard</a>
       <a href="cashout.html" class="nav-link" id="nav-cashout">Cash Out</a>
-      <a href="invoice.html" class="nav-link active" id="nav-invoice">Invoice</a>
+      <a href="invoice.html" class="nav-link active" id="nav-invoice">Invoices</a>
     </div>
     <a href="index.html" class="nav-link-logout" id="nav-logout">Sign Out</a>
   </nav>
 
   <section id="screen-invoice" class="screen active">
     <div class="screen-header">
-      <h1>Send Money</h1>
+      <h1>Service Buyer Invoices</h1>
     </div>
 
     <div class="screen-body">
-      <div class="invoice-card">
-        <h3>Pay Invoice</h3>
-        <form id="invoice-form">
-          <div class="form-group">
-            <label for="invoice-amount">Amount (USD)</label>
-            <input type="number" id="invoice-amount" name="amount" step="0.01" min="0" placeholder="100.00" required />
-          </div>
-          <button type="submit" class="btn pay-btn pay-card">Pay with Card</button>
-          <button type="button" class="btn pay-btn pay-bank">Pay via Bank Transfer</button>
-        </form>
-        <p class="note">Funds land on the recipient's mobile money within 30 minutes. No bank account needed for the
-          recipient.</p>
+      <div class="invoice-card" id="invoice-container">
+        <!-- Dynamically populated by initInvoice() -->
       </div>
     </div>
   </section>
