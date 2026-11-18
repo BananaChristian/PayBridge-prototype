@@ -29,12 +29,14 @@ interface Transaction {
 interface Invoice {
   id: string;
   clientName: string;
+  createdByName: string;
   amountUsd: number;
   description: string;
   status: "pending" | "settled";
   createdAt: string;
   settledAt?: string;
   reference?: string;
+  paidVia?: string;
 }
 
 interface AppState {
@@ -444,7 +446,7 @@ function generateInvoiceId(): string {
 
 function invoicePaymentLink(invoiceId: string): string {
   const base = window.location.href.replace(/[^/]*$/, "client-pay.html");
-  return `${base}?inv=${encodeURIComponent(invoiceId)}`;
+  return `${base}#inv=${encodeURIComponent(invoiceId)}`;
 }
 
 function renderInvoiceList(): void {
@@ -572,6 +574,7 @@ function initInvoice(): void {
     const invoice: Invoice = {
       id: generateInvoiceId(),
       clientName,
+      createdByName: state.user.name,
       amountUsd: amount,
       description,
       status: "pending",
@@ -629,6 +632,164 @@ function initInvoice(): void {
   renderInvoiceList();
 }
 
+// ---------- Client pay (payer view) ----------
+function initClientPay(): void {
+  const container = document.getElementById("client-pay-container") as HTMLElement | null;
+  if (!container) return;
+  const root: HTMLElement = container;
+
+  loadState();
+
+  const hash = window.location.hash.replace(/^#/, "");
+  const invId = new URLSearchParams(hash).get("inv") || "";
+  let found = state.invoices.find((i) => i.id === invId);
+
+  // Fallback: if the link id is missing or mangled, open the newest pending invoice.
+  if (!found) {
+    found = state.invoices
+      .filter((i) => i.status === "pending")
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+  }
+
+  if (!found) {
+    container.innerHTML = `
+      <div class="card">
+        <h2 style="font-size: 1.1rem; margin-bottom: 8px;">Invoice not found</h2>
+        <p style="color: #718096;">This link does not match any PayBridge invoice.</p>
+      </div>
+    `;
+    return;
+  }
+  const inv: Invoice = found;
+
+  if (inv.status === "settled") {
+    renderPaidState(root, inv);
+    return;
+  }
+
+  const fromName = inv.createdByName || "a PayBridge user";
+
+  root.innerHTML = `
+    <div class="card">
+      <div style="font-size: 0.85rem; color: #718096; margin-bottom: 4px;">Payment request</div>
+      <h2 style="font-size: 1.25rem; margin-bottom: 2px;">Invoice ${inv.id}</h2>
+      <div style="font-size: 0.85rem; color: #718096; margin-bottom: 20px;">Invoice from <strong>${fromName}</strong> (Uganda)</div>
+
+      <div class="receipt-detail"><span class="label">For</span><span class="value">${inv.description}</span></div>
+      <div class="receipt-detail"><span class="label">Amount</span><span class="value">$${fmtUsd(inv.amountUsd)}</span></div>
+      <div class="receipt-detail"><span class="label">Rate</span><span class="value">1 USD = UGX ${fmtUgx(PLANNING_RATE)}</span></div>
+
+      <div style="margin-top: 24px; display: flex; gap: 12px; flex-wrap: wrap;">
+        <button type="button" class="btn btn-primary" id="client-pay-card" style="width: auto;">Pay by card</button>
+        <button type="button" class="btn btn-secondary" id="client-pay-bank" style="width: auto;">Pay by bank transfer</button>
+      </div>
+      <p class="note" style="margin-top: 16px;">Funds delivered to the recipient's mobile money within 30 minutes of clearing.</p>
+
+      <div id="client-trust" style="margin-top: 20px; padding-top: 16px; border-top: 1px solid #e2e8f0;">
+        <div style="font-weight: 700; font-size: 0.9rem; margin-bottom: 6px;">Why is this safe?</div>
+        <p style="font-size: 0.85rem; color: #718096; line-height: 1.5;">
+          Settlement is handled by a Bank of Uganda-licensed payment service provider. PayBridge acts as its disclosed
+          agent under the National Payment Systems Act, 2020. You will receive a receipt.
+        </p>
+      </div>
+      <div style="margin-top: 16px; font-size: 0.8rem; color: #718096;">PayBridge, secure payments to Uganda</div>
+    </div>
+  `;
+
+  function showConfirm(method: "card" | "bank"): void {
+    const label = method === "card" ? "card" : "bank transfer";
+    root.innerHTML = `
+      <div class="card">
+        <div style="font-size: 0.85rem; color: #718096; margin-bottom: 8px;">Confirm payment</div>
+        <h2 style="font-size: 1.15rem; margin-bottom: 16px;">Check the details</h2>
+        <p style="font-size: 0.95rem; line-height: 1.6; margin-bottom: 24px;">
+          You are paying <strong>$${fmtUsd(inv.amountUsd)}</strong> to <strong>${fromName}</strong> for
+          <strong>${inv.description}</strong>. Invoice ${inv.id}, by ${label}.
+        </p>
+        <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+          <button type="button" class="btn btn-primary" id="client-confirm" style="width: auto;">Confirm payment</button>
+          <button type="button" class="btn btn-secondary" id="client-cancel" style="width: auto;">Cancel</button>
+        </div>
+      </div>
+    `;
+
+    document.getElementById("client-cancel")?.addEventListener("click", () => {
+      window.location.reload();
+    });
+
+    document.getElementById("client-confirm")?.addEventListener("click", () => {
+      showLoading(true);
+      setTimeout(() => {
+        showLoading(false);
+        loadState();
+        const target = state.invoices.find((i) => i.id === inv.id);
+        if (!target) return;
+        if (target.status === "settled") {
+          renderPaidState(root, target);
+          return;
+        }
+
+        const ref = generateRef();
+        target.status = "settled";
+        target.settledAt = new Date().toISOString();
+        target.reference = ref;
+        target.paidVia = label;
+
+        state.paybridgeBalanceUsd += target.amountUsd;
+        state.transactions.push({
+          id: "tx-" + Date.now(),
+          type: "receive",
+          amountUsd: target.amountUsd,
+          amountUgx: Math.round(target.amountUsd * PLANNING_RATE),
+          feeUsd: 0,
+          feeUgx: 0,
+          netUgx: Math.round(target.amountUsd * PLANNING_RATE),
+          status: "completed",
+          createdAt: new Date().toISOString(),
+          reference: ref,
+          network: state.user?.network || "MTN",
+          description: `Invoice ${target.id} paid by ${target.clientName}`,
+          invoiceId: target.id,
+          clientName: target.clientName,
+        });
+        saveState();
+        renderPaidState(root, target);
+        showToast("Payment sent", "success");
+      }, 1200);
+    });
+  }
+
+  document.getElementById("client-pay-card")?.addEventListener("click", () => showConfirm("card"));
+  document.getElementById("client-pay-bank")?.addEventListener("click", () => showConfirm("bank"));
+}
+
+function renderPaidState(container: HTMLElement, inv: Invoice): void {
+  const fromName = inv.createdByName || "a PayBridge user";
+  container.innerHTML = `
+    <div class="card" id="client-receipt">
+      <div style="font-size: 0.85rem; color: #00a67d; font-weight: 700; margin-bottom: 6px;">Payment sent</div>
+      <h2 style="font-size: 1.25rem; margin-bottom: 4px;">Receipt</h2>
+      <div style="font-size: 0.85rem; color: #718096; margin-bottom: 20px;">Invoice ${inv.id}</div>
+
+      <div class="receipt-detail"><span class="label">Paid to</span><span class="value">${fromName} (Uganda)</span></div>
+      <div class="receipt-detail"><span class="label">For</span><span class="value">${inv.description}</span></div>
+      <div class="receipt-detail"><span class="label">Paid via</span><span class="value">${inv.paidVia || "card"}</span></div>
+      <div class="receipt-detail"><span class="label">Amount</span><span class="value">$${fmtUsd(inv.amountUsd)}</span></div>
+      <div class="receipt-detail"><span class="label">Rate</span><span class="value">1 USD = UGX ${fmtUgx(PLANNING_RATE)}</span></div>
+      <div class="receipt-detail final"><span class="label">Reference</span><span class="value">${inv.reference || ""}</span></div>
+
+      <p class="note" style="margin-top: 16px;">Keep this reference. Funds are delivered to the recipient's mobile money within 30 minutes of clearing.</p>
+
+      <div style="margin-top: 20px;">
+        <button type="button" class="btn btn-secondary" id="client-print" style="width: auto;">Print receipt</button>
+      </div>
+      <div style="margin-top: 16px; font-size: 0.8rem; color: #718096;">PayBridge, secure payments to Uganda</div>
+    </div>
+  `;
+
+  document.getElementById("client-print")?.addEventListener("click", () => window.print());
+}
+
 // ---------- Receipt ----------
 function initReceipt(): void {
   const receiptRefEl = document.getElementById("receipt-ref");
@@ -656,4 +817,5 @@ initAuth();
 initDashboard();
 initCashout();
 initInvoice();
+initClientPay();
 initReceipt();

@@ -726,3 +726,34 @@ button {
     padding-top: 52px;
   }
 }
+
+/* ---------- Print ---------- */
+@media print {
+  html,
+  body {
+    background: #fff;
+    color: #000;
+  }
+
+  #app-nav,
+  .btn,
+  #loading-overlay,
+  #toast-container,
+  #client-trust {
+    display: none !important;
+  }
+
+  .screen-header {
+    padding: 0 0 12px 0;
+  }
+
+  .screen-body {
+    padding: 0;
+  }
+
+  .card {
+    box-shadow: none;
+    border: none;
+    padding: 0;
+  }
+}
