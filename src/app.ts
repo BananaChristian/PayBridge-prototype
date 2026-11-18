@@ -76,6 +76,10 @@ function generateRef(): string {
   return "PB-" + Math.floor(1000 + Math.random() * 9000);
 }
 
+function invoiceCreatorName(inv: Invoice): string {
+  return inv.createdByName || state.user?.name || "a PayBridge user";
+}
+
 function calcFee(amountUsd: number): { feeUsd: number; feeUgx: number; netUgx: number } {
   let feeUsd = amountUsd * INTRO_FEE_RATE;
   let feeUgx = feeUsd * PLANNING_RATE;
@@ -138,6 +142,12 @@ function loadState(): void {
   if (!Array.isArray(state.invoices)) {
     state.invoices = [];
   }
+  // Older invoices may not have the creator name stored on them.
+  state.invoices.forEach((inv) => {
+    if (!inv.createdByName && state.user) {
+      inv.createdByName = state.user.name;
+    }
+  });
   // Drop legacy pendingInvoices seeded by older prototype versions
   if ((state as any).pendingInvoices) {
     delete (state as any).pendingInvoices;
@@ -667,7 +677,7 @@ function initClientPay(): void {
     return;
   }
 
-  const fromName = inv.createdByName || "a PayBridge user";
+  const fromName = invoiceCreatorName(inv);
 
   root.innerHTML = `
     <div class="card">
@@ -764,7 +774,7 @@ function initClientPay(): void {
 }
 
 function renderPaidState(container: HTMLElement, inv: Invoice): void {
-  const fromName = inv.createdByName || "a PayBridge user";
+  const fromName = invoiceCreatorName(inv);
   container.innerHTML = `
     <div class="card" id="client-receipt">
       <div style="font-size: 0.85rem; color: #00a67d; font-weight: 700; margin-bottom: 6px;">Payment sent</div>
