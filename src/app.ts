@@ -379,9 +379,13 @@ function initCashout(): void {
   const feeUsdEl = document.getElementById("fee-usd")!;
   const netUgxEl = document.getElementById("net-ugx")!;
   const confirmBtn = document.getElementById("confirm-cashout") as HTMLButtonElement;
+  const availableEl = document.getElementById("cashout-available");
+  const overEl = document.getElementById("cashout-over");
   if (!cashoutAmountEl || !feeUsdEl || !netUgxEl || !confirmBtn) return;
 
   loadState();
+
+  if (availableEl) availableEl.textContent = `$${fmtUsd(state.paybridgeBalanceUsd)}`;
 
   function updateFeePreview(): void {
     const raw = cashoutAmountEl.value.trim();
@@ -390,22 +394,20 @@ function initCashout(): void {
       if (previewAmountEl) previewAmountEl.textContent = "$0.00";
       feeUsdEl.textContent = "–";
       netUgxEl.textContent = "–";
+      overEl?.classList.add("hidden");
       confirmBtn.disabled = true;
       return;
     }
-    const { feeUsd, netUgx } = calcFee(amount);
+    const { feeUsd, feeUgx, netUgx } = calcFee(amount);
     if (previewAmountEl) previewAmountEl.textContent = `$${fmtUsd(amount)}`;
-    feeUsdEl.textContent = `$${fmtUsd(feeUsd)}`;
+    feeUsdEl.textContent = `$${fmtUsd(feeUsd)} (UGX ${fmtUgx(Math.round(feeUgx))})`;
     netUgxEl.textContent = `UGX ${fmtUgx(Math.round(netUgx))}`;
-    
-    // Check against PayBridge cashable balance
-    if (amount > state.paybridgeBalanceUsd) {
-      confirmBtn.disabled = true;
-      confirmBtn.title = "Exceeds PayBridge cashable balance";
-    } else {
-      confirmBtn.disabled = false;
-      confirmBtn.title = "";
-    }
+
+    // Check against the amount available for delivery
+    const overBalance = amount > state.paybridgeBalanceUsd;
+    overEl?.classList.toggle("hidden", !overBalance);
+    confirmBtn.disabled = overBalance;
+    confirmBtn.title = overBalance ? "Exceeds your available balance" : "";
   }
 
   cashoutAmountEl.addEventListener("input", updateFeePreview);
@@ -416,7 +418,7 @@ function initCashout(): void {
     if (!amount || amount <= 0) return;
 
     if (amount > state.paybridgeBalanceUsd) {
-      showToast("Insufficient PayBridge cashable balance", "error");
+      showToast("Amount exceeds your available balance", "error");
       return;
     }
 
@@ -440,9 +442,8 @@ function initCashout(): void {
         description: "Cash Out to Mobile Money",
       };
 
-      // Reduce PayBridge cashable balance and add to actual account balance
+      // The amount leaves the available balance once it is delivered to mobile money
       state.paybridgeBalanceUsd -= amount;
-      state.accountBalanceUsd += amount;
       state.transactions.push(tx);
       saveState();
 

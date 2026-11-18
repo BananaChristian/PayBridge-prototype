@@ -13,7 +13,7 @@
     <div class="nav-brand">
       <img class="nav-avatar" src="https://ui-avatars.com/api/?name=User&background=00a67d&color=fff&size=32"
         alt="User" />
-      <span class="nav-user">User</span>
+      <span class="nav-user" id="nav-user">User</span>
     </div>
     <div class="nav-links">
       <a href="dashboard.html" class="nav-link" id="nav-dashboard">Dashboard</a>
@@ -25,13 +25,21 @@
 
   <section id="screen-cashout" class="screen active">
     <div class="screen-header">
+      <h1>Cash Out</h1>
+      <p>Send your earnings to MTN MoMo or Airtel Money.</p>
     </div>
 
     <div class="screen-body">
       <div class="card">
+        <p class="note" style="text-align: left; margin: 0 0 10px 0;">
+          Available to cash out: <strong id="cashout-available">$0.00</strong>
+        </p>
         <div class="amount-input-wrapper">
           <span class="amount-prefix">USD</span>
           <input type="number" id="cashout-amount" name="amount" step="0.01" min="0" placeholder="0.00" />
+        </div>
+        <div id="cashout-over" class="hidden" style="font-size: 0.85rem; color: #c53030; margin-top: 8px;">
+          Amount exceeds your available balance.
         </div>
         <div class="fee-breakdown">
           <div class="fee-row">
@@ -43,10 +51,13 @@
             <span class="value" id="fee-usd">–</span>
           </div>
           <div class="fee-row total">
-            <span class="label">You receive</span>
+            <span class="label">Delivered to mobile money</span>
             <span class="value" id="net-ugx">–</span>
           </div>
         </div>
+        <p class="note" style="text-align: left; margin: 12px 0 0 0;">
+          Rate: 1 USD = UGX 3,750 (planning rate)
+        </p>
         <div class="confirm-section">
           <button class="btn btn-primary" id="confirm-cashout">Confirm Cash Out</button>
         </div>
