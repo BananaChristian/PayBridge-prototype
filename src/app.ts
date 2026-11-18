@@ -331,8 +331,11 @@ function initDashboard(): void {
   pbUsdEl.textContent = `$${fmtUsd(state.paybridgeBalanceUsd)}`;
   pbUgxEl.textContent = `UGX ${fmtUgx(Math.round(state.paybridgeBalanceUsd * PLANNING_RATE))}`;
 
-  accUsdEl.textContent = `$${fmtUsd(state.accountBalanceUsd)}`;
-  accUgxEl.textContent = `UGX ${fmtUgx(Math.round(state.accountBalanceUsd * PLANNING_RATE))}`;
+  const deliveredUgx = state.transactions
+    .filter((tx) => tx.type === "cash_out" && tx.status === "completed")
+    .reduce((sum, tx) => sum + tx.netUgx, 0);
+  accUsdEl.textContent = `$${fmtUsd(deliveredUgx / PLANNING_RATE)}`;
+  accUgxEl.textContent = `UGX ${fmtUgx(deliveredUgx)}`;
 
   txListEl.innerHTML = "";
   if (state.transactions.length === 0) {
@@ -346,15 +349,23 @@ function initDashboard(): void {
     .forEach((tx) => {
       const el = document.createElement("div");
       el.className = `tx-item ${tx.type}`;
-      const sign = tx.type === "receive" ? "+" : "-";
-      const title = tx.description || (tx.type === "receive" ? "Funds Received" : "Cash Out to Mobile Money");
+      const isCashOut = tx.type === "cash_out";
+      const sign = isCashOut ? "-" : "+";
+      const title = tx.description || (isCashOut ? "Cash Out to Mobile Money" : "Funds Received");
+      const shownUgx = isCashOut ? tx.netUgx : tx.amountUgx;
+      const shownUsd = isCashOut ? tx.netUgx / PLANNING_RATE : tx.amountUsd;
+      const feeLine =
+        isCashOut && tx.amountUsd > 0
+          ? `<div class="tx-meta" style="color: #b7791f;">After ${(Math.round((tx.feeUsd / tx.amountUsd) * 1000) / 10).toFixed(1)}% fee (USD ${fmtUsd(tx.feeUsd)})</div>`
+          : "";
       el.innerHTML = `
         <div class="tx-info">
           <div class="tx-title">${title}</div>
           <div class="tx-meta">${tx.network}  ·  ${fmtDate(tx.createdAt)}  ·  Ref: ${tx.reference}</div>
+          ${feeLine}
         </div>
-        <div class="tx-amount ${tx.type === "receive" ? "text-green" : "text-dark"}">
-          ${sign} UGX ${fmtUgx(tx.amountUgx)} ($${fmtUsd(tx.amountUsd)})
+        <div class="tx-amount ${isCashOut ? "text-dark" : "text-green"}">
+          ${sign} UGX ${fmtUgx(shownUgx)} ($${fmtUsd(shownUsd)})
         </div>
       `;
       txListEl.appendChild(el);
