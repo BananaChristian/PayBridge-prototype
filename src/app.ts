@@ -21,12 +21,22 @@ interface Transaction {
   createdAt: string;
   reference: string;
   network: string;
+  description?: string;
+}
+
+interface PendingInvoice {
+  id: string;
+  client: string;
+  amountUsd: number;
+  dueDate: string;
 }
 
 interface AppState {
   user: User | null;
-  balanceUsd: number;
+  paybridgeBalanceUsd: number; // Funds received / cashable
+  accountBalanceUsd: number;     // Actual account balance after cash out
   transactions: Transaction[];
+  pendingInvoices: PendingInvoice[];
 }
 
 const PLANNING_RATE = 3750; // UGX per USD
@@ -35,6 +45,12 @@ const MIN_FEE_UGX = 3000;
 const MAX_FEE_RATE = 0.05; // 5% ceiling
 
 const STORAGE_KEY = "paybridge_prototype_v1";
+
+const DEFAULT_INVOICES: PendingInvoice[] = [
+  { id: "INV-101", client: "Acme Corp (Design Retainer)", amountUsd: 150.00, dueDate: "2026-11-25" },
+  { id: "INV-102", client: "Globex Ltd (Bug Fixes)", amountUsd: 85.00, dueDate: "2026-11-28" },
+  { id: "INV-103", client: "Nile Tech (API Integration)", amountUsd: 220.00, dueDate: "2026-12-02" },
+];
 
 // ---------- Helpers ----------
 function fmtUsd(v: number): string {
@@ -98,8 +114,10 @@ function showLoading(show: boolean): void {
 // ---------- State ----------
 let state: AppState = {
   user: null,
-  balanceUsd: 0,
+  paybridgeBalanceUsd: 0,
+  accountBalanceUsd: 0,
   transactions: [],
+  pendingInvoices: [...DEFAULT_INVOICES],
 };
 
 function loadState(): void {
@@ -113,14 +131,18 @@ function loadState(): void {
   }
   if (!state.user) state.user = null;
   if (!state.transactions) state.transactions = [];
-  if (typeof state.balanceUsd !== "number") state.balanceUsd = 0;
+  if (typeof state.paybridgeBalanceUsd !== "number") state.paybridgeBalanceUsd = 0;
+  if (typeof state.accountBalanceUsd !== "number") state.accountBalanceUsd = 0;
+  if (!Array.isArray(state.pendingInvoices)) {
+    state.pendingInvoices = [...DEFAULT_INVOICES];
+  }
 }
 
 function saveState(): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
-// ---------- Nav helpers (only on pages with navbar) ----------
+// ---------- Nav helpers ----------
 function setActiveNav(activeId: string): void {
   document.querySelectorAll(".nav-link").forEach((el) => {
     el.classList.remove("active");
@@ -131,7 +153,7 @@ function setActiveNav(activeId: string): void {
 
 function initNavbar(): void {
   const navUserEl = document.getElementById("nav-user");
-  if (!navUserEl) return; // no navbar on this page (e.g. landing)
+  if (!navUserEl) return;
 
   if (state.user) {
     navUserEl.textContent = state.user.name;
@@ -139,7 +161,6 @@ function initNavbar(): void {
     navUserEl.textContent = "User";
   }
 
-  // Determine which nav link should be active based on current page
   const path = window.location.pathname;
   const file = path.split("/").pop() || "index.html";
 
@@ -155,12 +176,11 @@ function initNavbar(): void {
   const activeId = linkMap[file];
   if (activeId) setActiveNav(activeId);
 
-  // Logout handler
   const logoutBtn = document.getElementById("nav-logout");
   if (logoutBtn) {
     logoutBtn.addEventListener("click", (e) => {
       e.preventDefault();
-      state = { user: null, balanceUsd: 0, transactions: [] };
+      state = { user: null, paybridgeBalanceUsd: 0, accountBalanceUsd: 0, transactions: [], pendingInvoices: [...DEFAULT_INVOICES] };
       saveState();
       showToast("Logged out", "info");
       window.location.href = "index.html";
@@ -168,13 +188,12 @@ function initNavbar(): void {
   }
 }
 
-// ---------- Auth (only on landing page) ----------
+// ---------- Auth ----------
 function initAuth(): void {
   const signInForm = document.getElementById("signin-form");
   const signUpForm = document.getElementById("signup-form");
   if (!signInForm && !signUpForm) return;
 
-  // Tab switching
   const tabSignIn = document.getElementById("tab-signin");
   const tabSignUp = document.getElementById("tab-signup");
   const formSignIn = document.getElementById("form-signin");
@@ -199,7 +218,6 @@ function initAuth(): void {
     });
   }
 
-  // Sign In
   if (signInForm) {
     signInForm.addEventListener("submit", (e) => {
       e.preventDefault();
@@ -233,7 +251,6 @@ function initAuth(): void {
     });
   }
 
-  // Sign Up
   if (signUpForm) {
     signUpForm.addEventListener("submit", (e) => {
       e.preventDefault();
@@ -257,7 +274,9 @@ function initAuth(): void {
       setTimeout(() => {
         showLoading(false);
         state.user = { name, email, phone, network, password, verified: true };
-        state.balanceUsd = 120.0;
+        state.paybridgeBalanceUsd = 120.0; // Initial cashable balance
+        state.accountBalanceUsd = 0.0;   // Actual account balance starts at 0
+        state.pendingInvoices = [...DEFAULT_INVOICES];
         state.transactions = [
           {
             id: "tx-001",
@@ -271,6 +290,7 @@ function initAuth(): void {
             createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
             reference: "PB-1041",
             network: "MTN",
+            description: "Initial Deposit Received",
           },
         ];
         saveState();
@@ -281,22 +301,27 @@ function initAuth(): void {
   }
 }
 
-// ---------- Dashboard (only on dashboard page) ----------
+// ---------- Dashboard ----------
 function initDashboard(): void {
-  const balanceUsdEl = document.getElementById("balance-usd");
-  const balanceUgxEl = document.getElementById("balance-ugx");
+  const pbUsdEl = document.getElementById("paybridge-balance-usd");
+  const pbUgxEl = document.getElementById("paybridge-balance-ugx");
+  const accUsdEl = document.getElementById("account-balance-usd");
+  const accUgxEl = document.getElementById("account-balance-ugx");
   const txListEl = document.getElementById("tx-list");
-  if (!balanceUsdEl || !balanceUgxEl || !txListEl) return;
+  if (!pbUsdEl || !pbUgxEl || !accUsdEl || !accUgxEl || !txListEl) return;
 
   loadState();
 
-  balanceUsdEl.textContent = fmtUsd(state.balanceUsd);
-  balanceUgxEl.textContent = fmtUgx(Math.round(state.balanceUsd * PLANNING_RATE));
+  pbUsdEl.textContent = `$${fmtUsd(state.paybridgeBalanceUsd)}`;
+  pbUgxEl.textContent = `UGX ${fmtUgx(Math.round(state.paybridgeBalanceUsd * PLANNING_RATE))}`;
+
+  accUsdEl.textContent = `$${fmtUsd(state.accountBalanceUsd)}`;
+  accUgxEl.textContent = `UGX ${fmtUgx(Math.round(state.accountBalanceUsd * PLANNING_RATE))}`;
 
   txListEl.innerHTML = "";
   if (state.transactions.length === 0) {
     txListEl.innerHTML = `
-      <div class="empty">No transactions yet. Your first cash-out will appear here.</div>
+      <div class="empty">No transactions yet.</div>
     `;
     return;
   }
@@ -306,27 +331,28 @@ function initDashboard(): void {
       const el = document.createElement("div");
       el.className = `tx-item ${tx.type}`;
       const sign = tx.type === "receive" ? "+" : "-";
+      const title = tx.description || (tx.type === "receive" ? "Funds Received" : "Cash Out to Mobile Money");
       el.innerHTML = `
         <div class="tx-info">
-          <div class="tx-title">${tx.type === "receive" ? "Funds Received" : "Cash Out to Mobile Money"}</div>
+          <div class="tx-title">${title}</div>
           <div class="tx-meta">${tx.network}  ·  ${fmtDate(tx.createdAt)}  ·  Ref: ${tx.reference}</div>
         </div>
         <div class="tx-amount ${tx.type === "receive" ? "text-green" : "text-dark"}">
-          ${sign} UGX ${fmtUgx(tx.amountUgx)}
+          ${sign} UGX ${fmtUgx(tx.amountUgx)} ($${fmtUsd(tx.amountUsd)})
         </div>
       `;
       txListEl.appendChild(el);
     });
 }
 
-// ---------- Cash Out (only on cashout page) ----------
+// ---------- Cash Out ----------
 function initCashout(): void {
   const cashoutAmountEl = document.getElementById("cashout-amount") as HTMLInputElement;
+  const previewAmountEl = document.getElementById("preview-amount");
   const feeUsdEl = document.getElementById("fee-usd")!;
-  const feeUgxEl = document.getElementById("fee-ugx")!;
   const netUgxEl = document.getElementById("net-ugx")!;
   const confirmBtn = document.getElementById("confirm-cashout") as HTMLButtonElement;
-  if (!cashoutAmountEl || !feeUsdEl || !feeUgxEl || !netUgxEl || !confirmBtn) return;
+  if (!cashoutAmountEl || !feeUsdEl || !netUgxEl || !confirmBtn) return;
 
   loadState();
 
@@ -334,18 +360,25 @@ function initCashout(): void {
     const raw = cashoutAmountEl.value.trim();
     const amount = parseFloat(raw);
     if (!amount || amount <= 0) {
+      if (previewAmountEl) previewAmountEl.textContent = "$0.00";
       feeUsdEl.textContent = "–";
-      feeUgxEl.textContent = "–";
       netUgxEl.textContent = "–";
       confirmBtn.disabled = true;
       return;
     }
-    const { feeUsd, feeUgx, netUgx } = calcFee(amount);
-    feeUsdEl.textContent = fmtUsd(feeUsd);
-    feeUgxEl.textContent = fmtUgx(Math.round(feeUgx));
-    netUgxEl.textContent = fmtUgx(Math.round(netUgx));
-    confirmBtn.disabled = amount > state.balanceUsd;
-    confirmBtn.title = amount > state.balanceUsd ? "Insufficient balance" : "";
+    const { feeUsd, netUgx } = calcFee(amount);
+    if (previewAmountEl) previewAmountEl.textContent = `$${fmtUsd(amount)}`;
+    feeUsdEl.textContent = `$${fmtUsd(feeUsd)}`;
+    netUgxEl.textContent = `UGX ${fmtUgx(Math.round(netUgx))}`;
+    
+    // Check against PayBridge cashable balance
+    if (amount > state.paybridgeBalanceUsd) {
+      confirmBtn.disabled = true;
+      confirmBtn.title = "Exceeds PayBridge cashable balance";
+    } else {
+      confirmBtn.disabled = false;
+      confirmBtn.title = "";
+    }
   }
 
   cashoutAmountEl.addEventListener("input", updateFeePreview);
@@ -354,11 +387,13 @@ function initCashout(): void {
     if (!state.user) return;
     const amount = parseFloat(cashoutAmountEl.value.trim());
     if (!amount || amount <= 0) return;
-    const { feeUsd, feeUgx, netUgx } = calcFee(amount);
-    if (amount > state.balanceUsd) {
-      showToast("Insufficient balance", "error");
+
+    if (amount > state.paybridgeBalanceUsd) {
+      showToast("Insufficient PayBridge cashable balance", "error");
       return;
     }
+
+    const { feeUsd, feeUgx, netUgx } = calcFee(amount);
 
     showLoading(true);
     setTimeout(() => {
@@ -375,49 +410,37 @@ function initCashout(): void {
         createdAt: new Date().toISOString(),
         reference: generateRef(),
         network: state.user!.network,
+        description: "Cash Out to Mobile Money",
       };
-      state.balanceUsd -= amount;
+
+      // Reduce PayBridge cashable balance and add to actual account balance
+      state.paybridgeBalanceUsd -= amount;
+      state.accountBalanceUsd += amount;
       state.transactions.push(tx);
       saveState();
+
       showToast("Cash out successful", "success");
       window.location.href = "receipt.html";
     }, 1500);
   });
 }
 
-
-/// ----------------------- start ---------------
-
-// ---------- Invoice (only on invoice page) ----------
-interface PendingInvoice {
-  id: string;
-  client: string;
-  amountUsd: number;
-  dueDate: string;
-}
-
-let mockPendingInvoices: PendingInvoice[] = [
-  { id: "INV-101", client: "Acme Corp (Design Retainer)", amountUsd: 150.00, dueDate: "2026-11-25" },
-  { id: "INV-102", client: "Globex Ltd (Bug Fixes)", amountUsd: 85.00, dueDate: "2026-11-28" },
-  { id: "INV-103", client: "Nile Tech (API Integration)", amountUsd: 220.00, dueDate: "2026-12-02" },
-];
-
+// ---------- Invoice ----------
 function initInvoice(): void {
   const invoiceContainer = document.getElementById("invoice-container") || document.querySelector(".invoice-card");
   if (!invoiceContainer) return;
 
   loadState();
 
-  // Render pending invoices and custom payment form
   invoiceContainer.innerHTML = `
     <h3>Pending Service Buyer Invoices</h3>
     <div class="invoice-tabs" style="display: flex; gap: 10px; margin-bottom: 16px;">
-      <button class="tab active" style="padding: 6px 12px; font-weight: 600;">Pending (${mockPendingInvoices.length})</button>
+      <button class="tab active" style="padding: 6px 12px; font-weight: 600;">Pending (${state.pendingInvoices.length})</button>
     </div>
     <div id="invoice-list-container">
-      ${mockPendingInvoices.length === 0 ? '<p class="empty">No pending invoices.</p>' : ''}
+      ${state.pendingInvoices.length === 0 ? '<p class="empty">No pending invoices.</p>' : ''}
       <div id="pending-invoices">
-        ${mockPendingInvoices.map(inv => `
+        ${state.pendingInvoices.map(inv => `
           <div class="tx-item" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 12px; border: 1px solid #e2e8f0; border-radius: 12px;">
             <div>
               <div style="font-weight: 700;">${inv.client}</div>
@@ -441,34 +464,31 @@ function initInvoice(): void {
         <button type="submit" class="btn pay-btn pay-card" style="background: #00a67d; color: #fff;">Pay Custom Amount</button>
       </form>
     </div>
-    <p class="note">Available Balance: $${fmtUsd(state.balanceUsd)}</p>
+    <p class="note">PayBridge Cashable Balance: $${fmtUsd(state.paybridgeBalanceUsd)}</p>
   `;
 
-  // Handle specific pending invoice payments
   document.querySelectorAll(".pay-invoice-btn").forEach(btn => {
     btn.addEventListener("click", (e) => {
       const invId = (e.currentTarget as HTMLElement).getAttribute("data-id");
-      const invIndex = mockPendingInvoices.findIndex(i => i.id === invId);
+      const invIndex = state.pendingInvoices.findIndex(i => i.id === invId);
       if (invIndex === -1) return;
 
-      const inv = mockPendingInvoices[invIndex];
+      const inv = state.pendingInvoices[invIndex];
       if (!state.user) {
         showToast("Please sign in first", "error");
         return;
       }
 
-      // Check balance consistency
-      if (inv.amountUsd > state.balanceUsd) {
-        showToast(`Insufficient balance. You need $${fmtUsd(inv.amountUsd)} but have $${fmtUsd(state.balanceUsd)}.`, "error");
+      if (inv.amountUsd > state.paybridgeBalanceUsd) {
+        showToast(`Insufficient PayBridge balance. You need $${fmtUsd(inv.amountUsd)} but have $${fmtUsd(state.paybridgeBalanceUsd)}.`, "error");
         return;
       }
 
       showLoading(true);
       setTimeout(() => {
         showLoading(false);
-        
-        // Deduct from balance and log accurate transaction matching the invoice amount
-        state.balanceUsd -= inv.amountUsd;
+
+        state.paybridgeBalanceUsd -= inv.amountUsd;
         state.transactions.push({
           id: "tx-" + Date.now(),
           type: "cash_out",
@@ -481,24 +501,23 @@ function initInvoice(): void {
           createdAt: new Date().toISOString(),
           reference: generateRef(),
           network: state.user!.network,
+          description: `Invoice Paid: ${inv.id}`,
         });
 
-        // Remove paid invoice from pending list
-        mockPendingInvoices.splice(invIndex, 1);
+        state.pendingInvoices.splice(invIndex, 1);
         saveState();
         showToast(`Invoice ${inv.id} paid successfully ($${fmtUsd(inv.amountUsd)})`, "success");
-        initInvoice(); // Refresh view
+        initInvoice();
       }, 1000);
     });
   });
 
-  // Handle custom amount payment form
   const invoiceForm = document.getElementById("invoice-form");
   invoiceForm?.addEventListener("submit", (e) => {
     e.preventDefault();
     const invoiceAmountEl = document.getElementById("invoice-amount") as HTMLInputElement | null;
     const amount = parseFloat(invoiceAmountEl?.value.trim() || "0");
-    
+
     if (!amount || amount <= 0) {
       showToast("Enter a valid amount", "error");
       return;
@@ -508,9 +527,8 @@ function initInvoice(): void {
       return;
     }
 
-    // Check balance consistency for custom amount
-    if (amount > state.balanceUsd) {
-      showToast(`Insufficient balance to pay $${fmtUsd(amount)}.`, "error");
+    if (amount > state.paybridgeBalanceUsd) {
+      showToast(`Insufficient PayBridge balance to pay $${fmtUsd(amount)}.`, "error");
       return;
     }
 
@@ -519,7 +537,7 @@ function initInvoice(): void {
     setTimeout(() => {
       showLoading(false);
 
-      state.balanceUsd -= amount;
+      state.paybridgeBalanceUsd -= amount;
       state.transactions.push({
         id: "tx-" + Date.now(),
         type: "cash_out",
@@ -532,6 +550,7 @@ function initInvoice(): void {
         createdAt: new Date().toISOString(),
         reference: generateRef(),
         network: user.network,
+        description: "Custom Invoice Payment",
       });
 
       saveState();
@@ -541,10 +560,7 @@ function initInvoice(): void {
   });
 }
 
-// ------------------------ end -----------------
-
-
-// ---------- Receipt (only on receipt page) ----------
+// ---------- Receipt ----------
 function initReceipt(): void {
   const receiptRefEl = document.getElementById("receipt-ref");
   const receiptAmountEl = document.getElementById("receipt-amount");

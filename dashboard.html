@@ -27,10 +27,18 @@
     </div>
 
     <div class="screen-body">
-      <div class="balance-card">
-        <div class="label">Available Balance</div>
-        <div class="value" id="balance-usd">$0.00</div>
-        <div class="ugx" id="balance-ugx">UGX 0</div>
+      <!-- PayBridge Cashable Balance Card -->
+      <div class="balance-card" style="margin-bottom: 16px;">
+        <div class="label">PayBridge Cashable Balance</div>
+        <div class="value" id="paybridge-balance-usd">$0.00</div>
+        <div class="ugx" id="paybridge-balance-ugx">UGX 0</div>
+      </div>
+
+      <!-- Actual Account Balance Card -->
+      <div class="balance-card" style="background: linear-gradient(135deg, #00a67d 0%, #008f68 100%); margin-bottom: 20px;">
+        <div class="label">Actual Account Balance</div>
+        <div class="value" id="account-balance-usd">$0.00</div>
+        <div class="ugx" id="account-balance-ugx">UGX 0</div>
       </div>
 
       <div class="quick-actions">
