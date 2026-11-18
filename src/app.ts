@@ -290,7 +290,7 @@ function initAuth(): void {
             createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
             reference: "PB-1041",
             network: "MTN",
-            description: "Initial Deposit Received",
+            description: "Received funds",
           },
         ];
         saveState();
