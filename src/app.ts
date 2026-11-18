@@ -823,13 +823,24 @@ function initReceipt(): void {
 
   loadState();
 
-  const last = state.transactions[state.transactions.length - 1];
-  if (!last) return;
-  receiptRefEl.textContent = last.reference;
-  receiptAmountEl.textContent = `UGX ${fmtUgx(last.amountUgx)}`;
-  receiptFeeEl.textContent = `UGX ${fmtUgx(last.feeUgx)}`;
-  receiptNetEl.textContent = `UGX ${fmtUgx(last.netUgx)}`;
-  receiptNetworkEl.textContent = last.network;
+  const cashOut = state.transactions
+    .filter((tx) => tx.type === "cash_out" && tx.status === "completed")
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+
+  if (!cashOut) {
+    receiptRefEl.textContent = "No cash out yet";
+    receiptAmountEl.textContent = "–";
+    receiptFeeEl.textContent = "–";
+    receiptNetEl.textContent = "–";
+    receiptNetworkEl.textContent = "–";
+    return;
+  }
+
+  receiptRefEl.textContent = cashOut.reference;
+  receiptAmountEl.textContent = `UGX ${fmtUgx(cashOut.amountUgx)}`;
+  receiptFeeEl.textContent = `UGX ${fmtUgx(cashOut.feeUgx)}`;
+  receiptNetEl.textContent = `UGX ${fmtUgx(cashOut.netUgx)}`;
+  receiptNetworkEl.textContent = cashOut.network;
 }
 
 // ---------- Init ----------
