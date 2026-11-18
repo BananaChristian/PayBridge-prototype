@@ -114,24 +114,24 @@ button {
   }
 
   .nav-user {
-    max-width: 110px;
+    max-width: 72px;
     overflow: hidden;
     text-overflow: ellipsis;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
   }
 
   .nav-links {
-    gap: 16px;
+    gap: 10px;
   }
 
   .nav-link {
-    font-size: 0.85rem;
+    font-size: 0.78rem;
   }
 
   .nav-link-logout {
-    padding: 4px 10px;
-    font-size: 0.85rem;
-    margin-left: 10px;
+    padding: 4px 8px;
+    font-size: 0.78rem;
+    margin-left: 6px;
   }
 }
 
@@ -321,6 +321,26 @@ button {
   cursor: not-allowed;
 }
 
+.btn-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: stretch;
+}
+
+.btn-row .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  padding: 10px 16px;
+  font-size: 0.9rem;
+  border-radius: 8px;
+  line-height: 1.2;
+  text-align: center;
+  text-decoration: none;
+}
+
 /* ---------- Dashboard ---------- */
 .balance-card {
   background: linear-gradient(135deg, #1a366a 0%, #2d3748 100%);
@@ -416,6 +436,12 @@ button {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 10px;
+  color: inherit;
+  text-decoration: none;
+}
+
+a.tx-item:hover {
+  border-color: #00a67d;
 }
 
 .tx-info .tx-title {
@@ -727,6 +753,34 @@ button {
   }
 }
 
+/* ---------- Receipt history ---------- */
+.receipt-history-month {
+  font-weight: 700;
+  color: #1a366a;
+  margin: 16px 0 8px;
+}
+
+.receipt-history-month:first-child {
+  margin-top: 0;
+}
+
+.receipt-history-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  cursor: pointer;
+}
+
+.receipt-history-card:hover {
+  border-color: #00a67d;
+}
+
+.receipt-history-card.selected {
+  border-color: #00a67d;
+  background: #f0fdf8;
+}
+
 /* ---------- Print ---------- */
 @media print {
   html,
@@ -739,7 +793,8 @@ button {
   .btn,
   #loading-overlay,
   #toast-container,
-  #client-trust {
+  #client-trust,
+  #receipt-history-section {
     display: none !important;
   }
 
@@ -751,7 +806,8 @@ button {
     padding: 0;
   }
 
-  .card {
+  .card,
+  .receipt-card {
     box-shadow: none;
     border: none;
     padding: 0;

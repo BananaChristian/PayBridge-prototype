@@ -1,35 +1,39 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PayBridge | Receipt</title>
+  <title>PayBridge | Receipts</title>
   <link rel="stylesheet" href="src/style.css" />
 </head>
+
 <body>
   <nav id="app-nav">
     <div class="nav-brand">
       <img class="nav-avatar" src="https://ui-avatars.com/api/?name=User&background=00a67d&color=fff&size=32"
         alt="User" />
-      <span class="nav-user">User</span>
+      <span class="nav-user" id="nav-user">User</span>
     </div>
     <div class="nav-links">
       <a href="dashboard.html" class="nav-link" id="nav-dashboard">Dashboard</a>
       <a href="cashout.html" class="nav-link" id="nav-cashout">Cash Out</a>
-      <a href="invoice.html" class="nav-link" id="nav-invoice">Invoice</a>
+      <a href="invoice.html" class="nav-link" id="nav-invoice">Invoices</a>
+      <a href="receipt.html" class="nav-link active" id="nav-receipts">Receipts</a>
     </div>
     <a href="index.html" class="nav-link-logout" id="nav-logout">Sign Out</a>
   </nav>
 
   <section id="screen-receipt" class="screen active">
     <div class="screen-header">
-      <h1>Payment Sent</h1>
+      <h1>Receipts</h1>
+      <p>Every payout and payment received, in one place.</p>
     </div>
 
     <div class="screen-body">
-      <div class="receipt-card">
+      <div class="receipt-card" id="receipt-detail-card">
         <div class="receipt-header">
-          <div class="badge">Transaction Complete</div>
+          <div class="badge" id="receipt-badge">Transaction Complete</div>
           <h2>Receipt</h2>
         </div>
         <div class="receipt-detail">
@@ -37,29 +41,53 @@
           <span class="value" id="receipt-ref">PB-0000</span>
         </div>
         <div class="receipt-detail">
-          <span class="label">Amount sent</span>
+          <span class="label" id="receipt-amount-label">Amount cashed out</span>
           <span class="value" id="receipt-amount">UGX 0</span>
         </div>
-        <div class="receipt-detail">
-          <span class="label">Fee (3.5%)</span>
+        <div class="receipt-detail" id="receipt-fee-row">
+          <span class="label" id="receipt-fee-label">Fee (3.5%)</span>
           <span class="value" id="receipt-fee">UGX 0</span>
         </div>
         <div class="receipt-detail final">
-          <span class="label">Total received</span>
+          <span class="label" id="receipt-net-label">Delivered to mobile money</span>
           <span class="value" id="receipt-net">UGX 0</span>
         </div>
-        <div class="receipt-detail">
-          <span class="label">Delivered to</span>
+        <div class="receipt-detail" id="receipt-network-row">
+          <span class="label" id="receipt-network-label">Delivered to</span>
           <span class="value" id="receipt-network">MTN MoMo</span>
+        </div>
+        <div class="receipt-detail">
+          <span class="label">Source</span>
+          <span class="value" id="receipt-source">Platform earnings</span>
+        </div>
+        <div class="receipt-detail">
+          <span class="label">Rate</span>
+          <span class="value">1 USD = UGX 3,750 (planning rate)</span>
         </div>
         <div class="receipt-footer">
           PayBridge &middot; Licensed PSP agent under NPS Act 2020 &middot; Keep this reference for support
         </div>
       </div>
-      <div style="margin-top: 20px;">
-        <a href="cashout.html" class="btn btn-primary" id="btn-new-cashout">Make Another Cash Out</a>
-        <a href="dashboard.html" class="btn btn-secondary" id="btn-back-receipt" style="margin-left: 12px;">Back to
-          Dashboard</a>
+
+      <div class="btn-row" style="margin-top: 20px;">
+        <button type="button" class="btn btn-primary" id="receipt-print">Print receipt</button>
+        <a href="cashout.html" class="btn btn-secondary" id="btn-new-cashout">Make Another Cash Out</a>
+        <a href="dashboard.html" class="btn btn-secondary" id="btn-back-receipt">Back to Dashboard</a>
+      </div>
+
+      <div class="card" id="receipt-history-section" style="margin-top: 24px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px;">
+          <h3 style="font-size: 1rem;">Receipt history</h3>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <select id="receipt-period"
+              style="padding: 8px 10px; border: 1px solid #cbd5e0; border-radius: 6px; font-size: 0.9rem;">
+              <option value="all">All time</option>
+            </select>
+            <input type="text" id="receipt-search" placeholder="Search reference, invoice, client, amount"
+              style="max-width: 300px; width: 100%; padding: 8px 10px; border: 1px solid #cbd5e0; border-radius: 6px; font-size: 0.9rem;" />
+          </div>
+        </div>
+        <div id="receipt-history"></div>
       </div>
     </div>
   </section>
@@ -73,4 +101,5 @@
 
   <script src="dist/app.js"></script>
 </body>
+
 </html>

@@ -184,9 +184,9 @@ function initNavbar(): void {
     "dashboard.html": "nav-dashboard",
     "cashout.html": "nav-cashout",
     "invoice.html": "nav-invoice",
+    "receipt.html": "nav-receipts",
     "index.html": null,
     "signin-out.html": null,
-    "receipt.html": null,
   };
 
   const activeId = linkMap[file];
@@ -299,9 +299,9 @@ function initAuth(): void {
             type: "receive",
             amountUsd: 120,
             amountUgx: 450000,
-            feeUsd: 4.2,
-            feeUgx: 15750,
-            netUgx: 434250,
+            feeUsd: 0,
+            feeUgx: 0,
+            netUgx: 450000,
             status: "completed",
             createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
             reference: "PB-1041",
@@ -347,8 +347,9 @@ function initDashboard(): void {
   [...state.transactions]
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .forEach((tx) => {
-      const el = document.createElement("div");
+      const el = document.createElement("a");
       el.className = `tx-item ${tx.type}`;
+      el.href = `receipt.html#tx=${encodeURIComponent(tx.id)}`;
       const isCashOut = tx.type === "cash_out";
       const sign = isCashOut ? "-" : "+";
       const title = tx.description || (isCashOut ? "Cash Out to Mobile Money" : "Funds Received");
@@ -517,6 +518,7 @@ function renderInvoiceList(): void {
           : `
             <div style="margin-top: 8px; font-size: 0.8rem; color: #718096;">
               Settled ${inv.settledAt ? fmtDate(inv.settledAt) : ""}${inv.reference ? ` · Ref: ${inv.reference}` : ""}
+              · <a href="receipt.html#inv=${encodeURIComponent(inv.id)}" style="color: #00a67d; font-weight: 700; text-decoration: none;">View receipt</a>
             </div>
           `;
 
@@ -814,33 +816,178 @@ function renderPaidState(container: HTMLElement, inv: Invoice): void {
 
 // ---------- Receipt ----------
 function initReceipt(): void {
-  const receiptRefEl = document.getElementById("receipt-ref");
-  const receiptAmountEl = document.getElementById("receipt-amount");
-  const receiptFeeEl = document.getElementById("receipt-fee");
-  const receiptNetEl = document.getElementById("receipt-net");
-  const receiptNetworkEl = document.getElementById("receipt-network");
-  if (!receiptRefEl || !receiptAmountEl || !receiptFeeEl || !receiptNetEl || !receiptNetworkEl) return;
+  const refEl = document.getElementById("receipt-ref");
+  const amountEl = document.getElementById("receipt-amount");
+  const amountLabelEl = document.getElementById("receipt-amount-label");
+  const feeEl = document.getElementById("receipt-fee");
+  const feeRowEl = document.getElementById("receipt-fee-row");
+  const netEl = document.getElementById("receipt-net");
+  const netLabelEl = document.getElementById("receipt-net-label");
+  const networkEl = document.getElementById("receipt-network");
+  const networkLabelEl = document.getElementById("receipt-network-label");
+  const networkRowEl = document.getElementById("receipt-network-row");
+  const sourceEl = document.getElementById("receipt-source");
+  const badgeEl = document.getElementById("receipt-badge");
+  const historyEl = document.getElementById("receipt-history");
+  if (
+    !refEl || !amountEl || !amountLabelEl || !feeEl || !feeRowEl || !netEl || !netLabelEl ||
+    !networkEl || !networkLabelEl || !networkRowEl || !sourceEl || !badgeEl || !historyEl
+  ) return;
 
   loadState();
 
-  const cashOut = state.transactions
-    .filter((tx) => tx.type === "cash_out" && tx.status === "completed")
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+  const searchEl = document.getElementById("receipt-search") as HTMLInputElement | null;
+  const periodEl = document.getElementById("receipt-period") as HTMLSelectElement | null;
+  let selectedId: string | null = null;
 
-  if (!cashOut) {
-    receiptRefEl.textContent = "No cash out yet";
-    receiptAmountEl.textContent = "–";
-    receiptFeeEl.textContent = "–";
-    receiptNetEl.textContent = "–";
-    receiptNetworkEl.textContent = "–";
-    return;
+  function periodOf(tx: Transaction): string {
+    return new Date(tx.createdAt).toLocaleString("en-US", { month: "long", year: "numeric" });
   }
 
-  receiptRefEl.textContent = cashOut.reference;
-  receiptAmountEl.textContent = `UGX ${fmtUgx(cashOut.amountUgx)}`;
-  receiptFeeEl.textContent = `UGX ${fmtUgx(cashOut.feeUgx)}`;
-  receiptNetEl.textContent = `UGX ${fmtUgx(cashOut.netUgx)}`;
-  receiptNetworkEl.textContent = cashOut.network;
+  function fromHash(): Transaction | undefined {
+    const hash = window.location.hash.replace(/^#/, "");
+    const params = new URLSearchParams(hash);
+    const txId = params.get("tx");
+    const invId = params.get("inv");
+    if (txId) return state.transactions.find((t) => t.id === txId);
+    if (invId) return state.transactions.find((t) => t.invoiceId === invId);
+    return undefined;
+  }
+
+  function sourceFor(tx: Transaction): string {
+    if (tx.invoiceId) {
+      return `Invoice ${tx.invoiceId}${tx.clientName ? ` (${tx.clientName})` : ""}`;
+    }
+    return "Platform earnings";
+  }
+
+  function showReceipt(tx: Transaction | null): void {
+    if (!tx) {
+      badgeEl!.textContent = "No receipt selected";
+      refEl!.textContent = "No receipts yet";
+      amountEl!.textContent = "–";
+      netEl!.textContent = "–";
+      networkEl!.textContent = "–";
+      sourceEl!.textContent = "–";
+      feeRowEl!.classList.add("hidden");
+      return;
+    }
+
+    const isCashOut = tx.type === "cash_out";
+    badgeEl!.textContent = isCashOut ? "Cash Out Complete" : "Payment Received";
+    refEl!.textContent = tx.reference;
+    amountLabelEl!.textContent = isCashOut ? "Amount cashed out" : "Amount received";
+    amountEl!.textContent = `UGX ${fmtUgx(tx.amountUgx)}`;
+    feeRowEl!.classList.toggle("hidden", !isCashOut);
+    feeEl!.textContent = `UGX ${fmtUgx(tx.feeUgx)}`;
+    netLabelEl!.textContent = isCashOut ? "Delivered to mobile money" : "Credited to available balance";
+    netEl!.textContent = `UGX ${fmtUgx(isCashOut ? tx.netUgx : tx.amountUgx)}`;
+    networkLabelEl!.textContent = isCashOut ? "Delivered to" : "From";
+    networkEl!.textContent = isCashOut ? `${tx.network} MoMo` : tx.clientName || "Direct client";
+    networkRowEl!.classList.remove("hidden");
+    sourceEl!.textContent = sourceFor(tx);
+  }
+
+  function renderHistory(): void {
+    const term = (searchEl?.value.trim() || "").toLowerCase();
+    const period = periodEl?.value || "all";
+    const items = state.transactions
+      .filter((tx) => {
+        if (period !== "all" && periodOf(tx) !== period) return false;
+        if (!term) return true;
+        const haystack = [
+          tx.reference,
+          tx.invoiceId || "",
+          tx.clientName || "",
+          tx.description || "",
+          tx.network,
+          tx.type === "cash_out" ? "cash out" : "payment received",
+          String(tx.amountUsd),
+          String(tx.amountUgx),
+          fmtDate(tx.createdAt),
+          periodOf(tx),
+        ].join(" ").toLowerCase();
+        return haystack.includes(term);
+      })
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+    if (items.length === 0) {
+      historyEl!.innerHTML = `<div class="empty">No receipts match these filters.</div>`;
+      return;
+    }
+
+    let currentMonth = "";
+    let html = "";
+    items.forEach((tx) => {
+      const d = new Date(tx.createdAt);
+      const month = d.toLocaleString("en-US", { month: "long", year: "numeric" });
+      if (month !== currentMonth) {
+        currentMonth = month;
+        html += `<div class="receipt-history-month">${month}</div>`;
+      }
+      const isCashOut = tx.type === "cash_out";
+      const stamp =
+        d.toLocaleString("en-UG", { day: "numeric", month: "short" }) +
+        " · " +
+        d.toLocaleString("en-UG", { hour: "2-digit", minute: "2-digit" });
+      html += `
+        <div class="receipt-history-card ${tx.id === selectedId ? "selected" : ""}" data-id="${tx.id}">
+          <div style="display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+            <div>
+              <div style="font-weight: 700;">${isCashOut ? "Cash out" : "Payment received"}</div>
+              <div style="font-size: 0.85rem; color: #718096; margin-top: 2px;">${tx.reference}${tx.invoiceId ? ` · ${tx.invoiceId}` : ""}</div>
+              <div style="font-size: 0.8rem; color: #718096; margin-top: 2px;">${stamp}</div>
+            </div>
+            <div style="text-align: right;">
+              <div style="font-weight: 700; color: ${isCashOut ? "#1a366a" : "#00a67d"}">UGX ${fmtUgx(tx.amountUgx)}</div>
+              <div style="font-size: 0.8rem; color: #718096; margin-top: 2px;">${isCashOut ? `${tx.network} MoMo` : tx.clientName || "Direct client"}</div>
+            </div>
+          </div>
+        </div>
+      `;
+    });
+    historyEl!.innerHTML = html;
+
+    historyEl!.querySelectorAll(".receipt-history-card").forEach((card) => {
+      card.addEventListener("click", () => {
+        const id = (card as HTMLElement).getAttribute("data-id");
+        const tx = state.transactions.find((t) => t.id === id);
+        if (!tx) return;
+        selectedId = tx.id;
+        showReceipt(tx);
+        renderHistory();
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      });
+    });
+  }
+
+  const sorted = [...state.transactions].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+  if (periodEl) {
+    sorted.forEach((tx) => {
+      const period = periodOf(tx);
+      const exists = Array.from(periodEl.options).some((option) => option.value === period);
+      if (!exists) {
+        const option = document.createElement("option");
+        option.value = period;
+        option.textContent = period;
+        periodEl.appendChild(option);
+      }
+    });
+  }
+
+  const initial =
+    fromHash() ||
+    sorted.find((tx) => tx.type === "cash_out" && tx.status === "completed") ||
+    sorted[0] ||
+    null;
+  selectedId = initial ? initial.id : null;
+  showReceipt(initial);
+  renderHistory();
+
+  searchEl?.addEventListener("input", renderHistory);
+  periodEl?.addEventListener("change", renderHistory);
+  document.getElementById("receipt-print")?.addEventListener("click", () => window.print());
 }
 
 // ---------- Init ----------
